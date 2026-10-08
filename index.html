@@ -26,26 +26,51 @@ details summary{cursor:pointer;color:var(--acc);font-size:14px;margin-top:6px}
 .p{background:var(--bg);border-radius:8px;padding:6px;text-align:center;font-size:14px}
 .p b{display:block;font-size:12px;color:var(--mut);font-weight:500}
 .del{float:right}
+[hidden]{display:none!important}
+.nav{background:var(--card);color:var(--fg);border:1px solid var(--bd);text-align:left;padding:18px;margin-bottom:10px;font-size:18px}
+.nav span{display:block;font-weight:400;font-size:13px;color:var(--mut);margin-top:4px}
+.back{margin-bottom:6px}
 .st{font-size:13px;color:var(--mut);margin:8px 0}
 .st.err{color:#d33}
+select{flex:1;min-width:0;padding:11px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font:inherit;width:100%;margin-bottom:8px}
 .set input{margin-bottom:8px;width:100%;flex:none}
 </style></head>
 <body><main>
-<h1>🏋️ I miei PR</h1>
+<div class="st" id="st"></div>
+<div id="v-home">
+<h1>🏋️ CrossFit PR</h1>
+<button class="nav" data-go="prs">📋 I miei PR<span>Aggiungi nuovi PR e rivedi lo storico</span></button>
+<button class="nav" data-go="calc">🧮 Calcolatore percentuali<span>Calcola i kg partendo da un PR o da un peso</span></button>
+<button class="nav" data-go="set">⚙️ Impostazioni GitHub<span>Collega il salvataggio online</span></button>
+</div>
+<div id="v-prs" hidden>
+<button class="ghost back">← Home</button>
+<h1>I miei PR</h1>
 <div class="card">
   <div class="row"><input id="mov" list="movs" placeholder="Movimento (es. Back Squat)"></div>
   <div class="row"><input id="w" type="number" inputmode="decimal" step="0.5" placeholder="Peso (kg)"><input id="d" type="date"></div>
   <button id="add">Aggiungi PR</button>
 </div>
 <datalist id="movs"><option>Back Squat</option><option>Front Squat</option><option>Overhead Squat</option><option>Deadlift</option><option>Clean</option><option>Power Clean</option><option>Clean & Jerk</option><option>Snatch</option><option>Power Snatch</option><option>Shoulder Press</option><option>Push Press</option><option>Push Jerk</option><option>Bench Press</option><option>Thruster</option></datalist>
-<details class="card set"><summary style="margin:0">⚙️ Salvataggio su GitHub</summary>
-<div style="margin-top:10px"><input id="go" placeholder="Utente GitHub"><input id="gr" placeholder="Nome repository"><input id="gb" placeholder="Branch (default: main)"><input id="gt" type="password" placeholder="Token (fine-grained, solo Contents)">
-<button id="gs">Salva e sincronizza</button>
-<p class="mut">Il file dei PR sarà <b>prs.json</b> nel repository. Il token resta solo in questo browser.</p></div></details>
-<div class="st" id="st"></div>
 <div id="list"></div>
 <div class="row" style="margin-top:18px"><button class="ghost" id="exp">Copia backup</button><button class="ghost" id="imp">Ripristina backup</button></div>
 <p class="mut">I dati restano salvati su questo browser. Usa il backup per non perderli.</p>
+</div>
+<div id="v-calc" hidden>
+<button class="ghost back">← Home</button>
+<h1>Calcolatore</h1>
+<div class="card"><select id="cb"></select>
+<input id="cw" type="number" inputmode="decimal" step="0.5" placeholder="Peso base (kg)" style="width:100%;margin-bottom:8px">
+<input id="cp" inputmode="decimal" placeholder="Percentuali, es. 72 o 70, 80, 87,5" style="width:100%;margin-bottom:8px">
+<div class="grid" id="cr"></div></div>
+</div>
+<div id="v-set" hidden>
+<button class="ghost back">← Home</button>
+<h1>Salvataggio su GitHub</h1>
+<div class="card set"><input id="go" placeholder="Utente GitHub"><input id="gr" placeholder="Nome repository"><input id="gb" placeholder="Branch (default: main)"><input id="gt" type="password" placeholder="Token (fine-grained, solo Contents)">
+<button id="gs">Salva e sincronizza</button>
+<p class="mut">Il file dei PR sarà <b>prs.json</b> nel repository. Il token resta solo in questo browser.</p></div>
+</div>
 </main>
 <script>
 var K='cf_prs',prs=[];
@@ -56,22 +81,29 @@ $('d').value=new Date().toISOString().slice(0,10);
 function r(x){return (Math.round(x*2)/2).toString().replace('.',',')}
 function fd(s){var p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0]}
 function esc(s){return s.replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function grp(){
+  var g={};
+  prs.forEach(function(p){var k=p.m.trim().toLowerCase();(g[k]=g[k]||[]).push(p)});
+  Object.keys(g).forEach(function(k){g[k].sort(function(x,y){return y.d.localeCompare(x.d)||y.id-x.id})});
+  return g;
+}
 function render(){
-  var g={};prs.forEach(function(p){(g[p.m]=g[p.m]||[]).push(p)});
-  var h='';
-  Object.keys(g).sort().forEach(function(m){
-    var a=g[m].sort(function(x,y){return y.d.localeCompare(x.d)});
-    var best=Math.max.apply(null,a.map(function(p){return p.w}));
-    h+='<h2>'+esc(m)+'</h2>';
-    a.forEach(function(p){
-      var grid='';
-      for(var c=100;c>=50;c-=5)grid+='<div class="p"><b>'+c+'%</b>'+r(p.w*c/100)+' kg</div>';
-      h+='<div class="card"><div class="top"><span class="big">'+r(p.w)+' kg'+(p.w===best?'<span class="best">PR MAX</span>':'')+'</span><span class="mut">'+fd(p.d)+'</span></div>'
-        +'<details><summary>Percentuali</summary><div class="grid">'+grid+'</div></details>'
-        +'<button class="ghost del" data-id="'+p.id+'" style="margin-top:8px">Elimina</button><div style="clear:both"></div></div>';
-    });
+  var g=grp(),h='';
+  Object.keys(g).sort().forEach(function(k){
+    var a=g[k],cur=a[0],old=a.slice(1),grid='';
+    for(var c=100;c>=50;c-=5)grid+='<div class="p"><b>'+c+'%</b>'+r(cur.w*c/100)+' kg</div>';
+    h+='<div class="card"><div class="top"><b>'+esc(cur.m)+'</b><span class="mut">'+fd(cur.d)+'</span></div>'
+      +'<div class="big">'+r(cur.w)+' kg</div>'
+      +'<details><summary>Percentuali</summary><div class="grid">'+grid+'</div></details>';
+    if(old.length){
+      h+='<details><summary>Storico ('+old.length+')</summary>'+old.map(function(p){
+        return '<div class="top" style="padding:6px 0;border-top:1px solid var(--bd);margin-top:6px"><span>'+r(p.w)+' kg <span class="mut">'+fd(p.d)+'</span></span><button class="ghost" data-id="'+p.id+'" style="padding:4px 10px">Elimina</button></div>';
+      }).join('')+'</details>';
+    }
+    h+='<button class="ghost del" data-id="'+cur.id+'" style="margin-top:8px">Elimina ultimo PR</button><div style="clear:both"></div></div>';
   });
   $('list').innerHTML=h||'<p class="mut">Nessun PR ancora. Aggiungi il primo!</p>';
+  if(window.fillCalc)fillCalc();
 }
 var C={};try{C=JSON.parse(localStorage.getItem('cf_cfg')||'{}')}catch(e){}
 $('go').value=C.o||'';$('gr').value=C.r||'';$('gb').value=C.b||'';$('gt').value=C.t||'';
@@ -131,5 +163,31 @@ $('imp').onclick=function(){
   var t=prompt('Incolla il backup:');if(!t)return;
   try{var a=JSON.parse(t);if(Array.isArray(a)){prs=a;save();render()}}catch(e){alert('Backup non valido')}
 };
-render();sync();
+
+function bestMap(){var g=grp(),b={};Object.keys(g).forEach(function(k){b[g[k][0].m]=g[k][0].w});return b}
+function fillCalc(){
+  var sel=$('cb'),old=sel.value,b=bestMap(),h='<option value="">Peso manuale</option>';
+  Object.keys(b).sort().forEach(function(m){h+='<option value="'+b[m]+'">'+esc(m)+' - PR attuale '+r(b[m])+' kg</option>'});
+  sel.innerHTML=h;
+  if([].some.call(sel.options,function(o){return o.value===old}))sel.value=old;
+  calc();
+}
+function calc(){
+  var base=$('cb').value?parseFloat($('cb').value):parseFloat(($('cw').value||'').replace(',','.'));
+  $('cw').disabled=!!$('cb').value;
+  if($('cb').value)$('cw').value=r(base).replace(',','.');
+  var ps=$('cp').value.split(/[;\s]+|,\s+/).join(' ').split(' ').map(function(x){return parseFloat(x.replace(',','.'))}).filter(function(x){return x>0});
+  var h='';
+  if(base>0)ps.forEach(function(c){h+='<div class="p"><b>'+String(c).replace('.',',')+'%</b>'+r(base*c/100)+' kg</div>'});
+  $('cr').innerHTML=h;
+}
+$('cb').onchange=calc;$('cw').oninput=calc;$('cp').oninput=calc;
+
+function show(v){['home','prs','calc','set'].forEach(function(n){$('v-'+n).hidden=n!==v});window.scrollTo(0,0)}
+document.addEventListener('click',function(e){
+  var t=e.target.closest&&e.target.closest('[data-go]');
+  if(t)show(t.getAttribute('data-go'));
+  else if(e.target.classList&&e.target.classList.contains('back'))show('home');
+});
+fillCalc();render();sync();
 </script></body></html>
