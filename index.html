@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CrossFit PR</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f6f4;--fg:#1b1b1b;--card:#fff;--mut:#777;--acc:#e8541e;--bd:#e3e3df}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111;--fg:#eee;--card:#1c1c1c;--mut:#999;--bd:#2c2c2c}}
+:root[data-theme="dark"]{--bg:#111;--fg:#eee;--card:#1c1c1c;--mut:#999;--bd:#2c2c2c}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:560px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:4px 0 14px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:22px 0 8px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:8px}
+.row{display:flex;gap:8px;margin-bottom:8px}
+input{flex:1;min-width:0;padding:11px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font:inherit}
+button{padding:11px 14px;border-radius:8px;border:0;background:var(--acc);color:#fff;font:inherit;font-weight:600;width:100%}
+button.ghost{background:none;color:var(--mut);border:1px solid var(--bd);width:auto;font-weight:400;padding:8px 12px}
+.top{display:flex;justify-content:space-between;align-items:baseline}
+.big{font-size:20px;font-weight:700}
+.mut{color:var(--mut);font-size:13px}
+.best{color:var(--acc);font-weight:700;font-size:12px;margin-left:6px}
+details summary{cursor:pointer;color:var(--acc);font-size:14px;margin-top:6px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.p{background:var(--bg);border-radius:8px;padding:6px;text-align:center;font-size:14px}
+.p b{display:block;font-size:12px;color:var(--mut);font-weight:500}
+.del{float:right}
+.st{font-size:13px;color:var(--mut);margin:8px 0}
+.st.err{color:#d33}
+.set input{margin-bottom:8px;width:100%;flex:none}
+</style></head>
+<body><main>
+<h1>🏋️ I miei PR</h1>
+<div class="card">
+  <div class="row"><input id="mov" list="movs" placeholder="Movimento (es. Back Squat)"></div>
+  <div class="row"><input id="w" type="number" inputmode="decimal" step="0.5" placeholder="Peso (kg)"><input id="d" type="date"></div>
+  <button id="add">Aggiungi PR</button>
+</div>
+<datalist id="movs"><option>Back Squat</option><option>Front Squat</option><option>Overhead Squat</option><option>Deadlift</option><option>Clean</option><option>Power Clean</option><option>Clean & Jerk</option><option>Snatch</option><option>Power Snatch</option><option>Shoulder Press</option><option>Push Press</option><option>Push Jerk</option><option>Bench Press</option><option>Thruster</option></datalist>
+<details class="card set"><summary style="margin:0">⚙️ Salvataggio su GitHub</summary>
+<div style="margin-top:10px"><input id="go" placeholder="Utente GitHub"><input id="gr" placeholder="Nome repository"><input id="gb" placeholder="Branch (default: main)"><input id="gt" type="password" placeholder="Token (fine-grained, solo Contents)">
+<button id="gs">Salva e sincronizza</button>
+<p class="mut">Il file dei PR sarà <b>prs.json</b> nel repository. Il token resta solo in questo browser.</p></div></details>
+<div class="st" id="st"></div>
+<div id="list"></div>
+<div class="row" style="margin-top:18px"><button class="ghost" id="exp">Copia backup</button><button class="ghost" id="imp">Ripristina backup</button></div>
+<p class="mut">I dati restano salvati su questo browser. Usa il backup per non perderli.</p>
+</main>
+<script>
+var K='cf_prs',prs=[];
+try{prs=JSON.parse(localStorage.getItem(K)||'[]')}catch(e){prs=[]}
+function save(){try{localStorage.setItem(K,JSON.stringify(prs))}catch(e){}}
+var $=function(i){return document.getElementById(i)};
+$('d').value=new Date().toISOString().slice(0,10);
+function r(x){return (Math.round(x*2)/2).toString().replace('.',',')}
+function fd(s){var p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0]}
+function esc(s){return s.replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function render(){
+  var g={};prs.forEach(function(p){(g[p.m]=g[p.m]||[]).push(p)});
+  var h='';
+  Object.keys(g).sort().forEach(function(m){
+    var a=g[m].sort(function(x,y){return y.d.localeCompare(x.d)});
+    var best=Math.max.apply(null,a.map(function(p){return p.w}));
+    h+='<h2>'+esc(m)+'</h2>';
+    a.forEach(function(p){
+      var grid='';
+      for(var c=100;c>=50;c-=5)grid+='<div class="p"><b>'+c+'%</b>'+r(p.w*c/100)+' kg</div>';
+      h+='<div class="card"><div class="top"><span class="big">'+r(p.w)+' kg'+(p.w===best?'<span class="best">PR MAX</span>':'')+'</span><span class="mut">'+fd(p.d)+'</span></div>'
+        +'<details><summary>Percentuali</summary><div class="grid">'+grid+'</div></details>'
+        +'<button class="ghost del" data-id="'+p.id+'" style="margin-top:8px">Elimina</button><div style="clear:both"></div></div>';
+    });
+  });
+  $('list').innerHTML=h||'<p class="mut">Nessun PR ancora. Aggiungi il primo!</p>';
+}
+var C={};try{C=JSON.parse(localStorage.getItem('cf_cfg')||'{}')}catch(e){}
+$('go').value=C.o||'';$('gr').value=C.r||'';$('gb').value=C.b||'';$('gt').value=C.t||'';
+function on(){return C.o&&C.r&&C.t}
+function st(t,e){$('st').textContent=t;$('st').className='st'+(e?' err':'')}
+function b64(x){return btoa(unescape(encodeURIComponent(x)))}
+function unb64(x){return decodeURIComponent(escape(atob(x.replace(/\n/g,''))))}
+function url(){return 'https://api.github.com/repos/'+encodeURIComponent(C.o)+'/'+encodeURIComponent(C.r)+'/contents/prs.json'}
+function hd(){return{'Authorization':'Bearer '+C.t,'Accept':'application/vnd.github+json'}}
+function br(){return C.b||'main'}
+async function pull(){
+  var res=await fetch(url()+'?ref='+encodeURIComponent(br()),{headers:hd(),cache:'no-store'});
+  if(res.status===404)return{data:[],sha:null};
+  if(!res.ok)throw new Error('GitHub '+res.status);
+  var j=await res.json();return{data:JSON.parse(unb64(j.content)||'[]'),sha:j.sha};
+}
+async function push(data,sha){
+  var body={message:'Aggiorna PR',content:b64(JSON.stringify(data,null,1)),branch:br()};
+  if(sha)body.sha=sha;
+  var res=await fetch(url(),{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},hd()),body:JSON.stringify(body)});
+  if(!res.ok)throw new Error('GitHub '+res.status);
+}
+async function sync(del){
+  if(!on()){st('Solo locale: configura GitHub per sincronizzare.');return}
+  st('Sincronizzo...');
+  try{
+    var r=await pull(),map={};
+    r.data.forEach(function(p){map[p.id]=p});
+    if(del)delete map[del];else prs.forEach(function(p){map[p.id]=p});
+    var out=Object.keys(map).map(function(k){return map[k]});
+    if(del||out.length!==r.data.length)await push(out,r.sha);
+    prs=out;save();render();st('✓ Sincronizzato con GitHub');
+  }catch(e){st('Errore: '+e.message+'. Dati tenuti in locale.',true)}
+}
+$('gs').onclick=function(){
+  C={o:$('go').value.trim(),r:$('gr').value.trim(),b:$('gb').value.trim(),t:$('gt').value.trim()};
+  try{localStorage.setItem('cf_cfg',JSON.stringify(C))}catch(e){}
+  sync();
+};
+$('add').onclick=function(){
+  var m=$('mov').value.trim(),w=parseFloat($('w').value.replace(',','.')),d=$('d').value;
+  if(!m||!(w>0)||!d)return;
+  prs.push({id:Date.now(),m:m,w:w,d:d});save();$('w').value='';render();sync();
+};
+$('list').onclick=function(e){
+  var id=e.target.getAttribute&&e.target.getAttribute('data-id');
+  if(id&&confirm('Eliminare questo PR?')){
+    prs=prs.filter(function(p){return String(p.id)!==id});save();render();
+    if(on())sync(Number(id));
+  }
+};
+$('exp').onclick=function(){
+  var t=JSON.stringify(prs);
+  try{navigator.clipboard.writeText(t).then(function(){alert('Backup copiato negli appunti')})}catch(e){prompt('Copia il backup:',t)}
+};
+$('imp').onclick=function(){
+  var t=prompt('Incolla il backup:');if(!t)return;
+  try{var a=JSON.parse(t);if(Array.isArray(a)){prs=a;save();render()}}catch(e){alert('Backup non valido')}
+};
+render();sync();
+</script></body></html>
