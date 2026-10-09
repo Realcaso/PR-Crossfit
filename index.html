@@ -2,6 +2,13 @@
 <html lang="it"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CrossFit PR</title>
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="CrossFit PR">
+
 <style>
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f6f4;--fg:#1b1b1b;--card:#fff;--mut:#777;--acc:#e8541e;--bd:#e3e3df}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111;--fg:#eee;--card:#1c1c1c;--mut:#999;--bd:#2c2c2c}}
@@ -34,6 +41,16 @@ details summary{cursor:pointer;color:var(--acc);font-size:14px;margin-top:6px}
 .st.err{color:#d33}
 select{flex:1;min-width:0;padding:11px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font:inherit;width:100%;margin-bottom:8px}
 .set input{margin-bottom:8px;width:100%;flex:none}
+
+.fl{display:block;flex:1;font-size:12px;color:var(--mut)}
+.fl input{width:100%;margin-top:4px}
+.sm{padding:4px 10px!important}
+#trun{border-radius:16px;padding:24px 12px;text-align:center;color:#fff;background:#555;min-height:70vh;display:flex;flex-direction:column;justify-content:center;gap:10px}
+#trun.work{background:#e8541e}#trun.rest{background:#2a6fdb}#trun.done{background:#1f8f4e}
+#rt{font-size:min(26vw,120px);font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
+#rl{font-size:22px;font-weight:700}
+#trun .m{opacity:.85;font-size:15px}
+#trun button{background:rgba(0,0,0,.3);margin-top:8px}
 </style></head>
 <body><main>
 <div class="st" id="st"></div>
@@ -41,6 +58,7 @@ select{flex:1;min-width:0;padding:11px;border-radius:8px;border:1px solid var(--
 <h1>🏋️ CrossFit PR</h1>
 <button class="nav" data-go="prs">📋 I miei PR<span>Aggiungi nuovi PR e rivedi lo storico</span></button>
 <button class="nav" data-go="calc">🧮 Calcolatore percentuali<span>Calcola i kg partendo da un PR o da un peso</span></button>
+<button class="nav" data-go="timer">⏱️ Timer e workout<span>Crea workout con AMRAP, EMOM, Tabata, For Time e riposi</span></button>
 <button class="nav" data-go="set">⚙️ Impostazioni GitHub<span>Collega il salvataggio online</span></button>
 </div>
 <div id="v-prs" hidden>
@@ -63,6 +81,21 @@ select{flex:1;min-width:0;padding:11px;border-radius:8px;border:1px solid var(--
 <input id="cw" type="number" inputmode="decimal" step="0.5" placeholder="Peso base (kg)" style="width:100%;margin-bottom:8px">
 <input id="cp" inputmode="decimal" placeholder="Percentuali, es. 72 o 70, 80, 87,5" style="width:100%;margin-bottom:8px">
 <div class="grid" id="cr"></div></div>
+</div>
+<div id="v-timer" hidden>
+<div id="tbuild">
+<button class="ghost back">← Home</button>
+<h1>Timer e workout</h1>
+<div id="tsaved"></div>
+<div class="card"><input id="tn" placeholder="Nome workout (es. Lunedì)" style="width:100%;margin-bottom:8px">
+<div id="tb"></div>
+<div class="row" style="margin-top:8px"><select id="tt" style="margin:0"></select><button id="tadd" style="width:auto;white-space:nowrap">+ Blocco</button></div></div>
+<div class="row"><button id="tgo">▶ Avvia</button><button id="tsv" class="ghost" style="width:auto">Salva</button></div>
+</div>
+<div id="trun" hidden>
+<div class="m" id="rb"></div><div id="rl"></div><div id="rt">00:00</div><div class="m" id="rn"></div>
+<button id="rp">Pausa</button><button id="rs">Salta ⏭</button><button id="rx">Stop</button>
+</div>
 </div>
 <div id="v-set" hidden>
 <button class="ghost back">← Home</button>
@@ -183,11 +216,147 @@ function calc(){
 }
 $('cb').onchange=calc;$('cw').oninput=calc;$('cp').oninput=calc;
 
-function show(v){['home','prs','calc','set'].forEach(function(n){$('v-'+n).hidden=n!==v});window.scrollTo(0,0)}
+function show(v){['home','prs','calc','timer','set'].forEach(function(n){$('v-'+n).hidden=n!==v});window.scrollTo(0,0)}
 document.addEventListener('click',function(e){
   var t=e.target.closest&&e.target.closest('[data-go]');
   if(t)show(t.getAttribute('data-go'));
   else if(e.target.classList&&e.target.classList.contains('back'))show('home');
 });
+
+var TY={
+ amrap:{n:'AMRAP',f:[['min','Minuti',12]]},
+ emom:{n:'EMOM',f:[['min','Minuti',10],['sec','Ogni (sec)',60]]},
+ tabata:{n:'Tabata',f:[['w','Lavoro (s)',20],['r','Riposo (s)',10],['n','Round',8]]},
+ interval:{n:'Intervalli',f:[['w','Lavoro (s)',40],['r','Riposo (s)',20],['n','Round',5]]},
+ fortime:{n:'For Time',f:[['min','Time cap (min)',15]]},
+ rest:{n:'Riposo',f:[['sec','Secondi',60]]}
+};
+var blocks=[],WO=[];
+try{WO=JSON.parse(localStorage.getItem('cf_wo')||'[]')}catch(e){}
+function saveWO(){try{localStorage.setItem('cf_wo',JSON.stringify(WO))}catch(e){}}
+(function(){var h='';Object.keys(TY).forEach(function(k){h+='<option value="'+k+'">'+TY[k].n+'</option>'});$('tt').innerHTML=h})();
+function renderSaved(){
+  var h='';
+  WO.forEach(function(w,i){
+    h+='<div class="card"><div class="top"><b>'+esc(w.name)+'</b><span class="mut">'+w.blocks.length+' blocchi</span></div>'
+     +'<div class="row" style="margin:8px 0 0"><button class="ghost sm" data-sv="load" data-i="'+i+'">Carica</button><button class="ghost sm" data-sv="del" data-i="'+i+'">Elimina</button></div></div>';
+  });
+  $('tsaved').innerHTML=h?'<h2>Workout salvati</h2>'+h+'<h2>Nuovo / modifica</h2>':'';
+}
+function renderBlocks(){
+  var h='';
+  blocks.forEach(function(b,i){
+    var T=TY[b.t];
+    h+='<div class="card" style="background:var(--bg)"><div class="top"><b>'+(i+1)+'. '+T.n+'</b><span>'
+     +'<button class="ghost sm" data-act="up" data-i="'+i+'">↑</button> <button class="ghost sm" data-act="dn" data-i="'+i+'">↓</button> <button class="ghost sm" data-act="rm" data-i="'+i+'">✕</button></span></div>'
+     +'<input data-nm="1" data-i="'+i+'" placeholder="Nome / esercizi (facoltativo)" value="'+esc(b.name||'')+'" style="width:100%;margin:8px 0">'
+     +'<div class="row" style="margin:0">';
+    T.f.forEach(function(f){h+='<label class="fl">'+f[1]+'<input type="number" inputmode="numeric" min="1" value="'+b.v[f[0]]+'" data-i="'+i+'" data-k="'+f[0]+'"></label>'});
+    h+='</div></div>';
+  });
+  $('tb').innerHTML=h||'<p class="mut">Nessun blocco. Aggiungine uno qui sotto.</p>';
+  renderSaved();
+}
+$('tadd').onclick=function(){
+  var t=$('tt').value,v={};TY[t].f.forEach(function(f){v[f[0]]=f[2]});
+  blocks.push({t:t,v:v,name:''});renderBlocks();
+};
+$('tb').addEventListener('input',function(e){
+  var el=e.target,i=el.getAttribute('data-i');if(i===null)return;
+  if(el.getAttribute('data-nm'))blocks[i].name=el.value;
+  else blocks[i].v[el.getAttribute('data-k')]=Math.max(1,Math.floor(Number(el.value))||1);
+});
+$('tb').addEventListener('click',function(e){
+  var a=e.target.getAttribute('data-act'),i=Number(e.target.getAttribute('data-i'));if(!a)return;
+  if(a==='rm')blocks.splice(i,1);
+  else if(a==='up'&&i>0){var t=blocks[i];blocks[i]=blocks[i-1];blocks[i-1]=t}
+  else if(a==='dn'&&i<blocks.length-1){var u=blocks[i];blocks[i]=blocks[i+1];blocks[i+1]=u}
+  renderBlocks();
+});
+$('tsaved').addEventListener('click',function(e){
+  var a=e.target.getAttribute('data-sv'),i=Number(e.target.getAttribute('data-i'));if(!a)return;
+  if(a==='load'){blocks=JSON.parse(JSON.stringify(WO[i].blocks));$('tn').value=WO[i].name;renderBlocks();window.scrollTo(0,document.body.scrollHeight)}
+  else if(confirm('Eliminare questo workout?')){WO.splice(i,1);saveWO();renderSaved()}
+});
+$('tsv').onclick=function(){
+  if(!blocks.length)return;
+  var n=$('tn').value.trim()||'Workout',w={name:n,blocks:JSON.parse(JSON.stringify(blocks))},k=-1;
+  WO.forEach(function(x,i){if(x.name===n)k=i});
+  if(k>=0)WO[k]=w;else WO.push(w);
+  saveWO();renderSaved();
+};
+function expand(){
+  var P=[{label:'Pronti',sub:'',dur:5,kind:'ready',bi:-1}];
+  blocks.forEach(function(b,bi){
+    var v=b.v,T=TY[b.t].n,nm=b.name||'';
+    if(b.t==='amrap')P.push({label:T,sub:nm,dur:v.min*60,kind:'work',bi:bi});
+    else if(b.t==='emom'){var n=Math.max(1,Math.floor(v.min*60/v.sec));for(var i=1;i<=n;i++)P.push({label:T,sub:(nm?nm+' · ':'')+'Giro '+i+'/'+n,dur:v.sec,kind:'work',bi:bi})}
+    else if(b.t==='tabata'||b.t==='interval'){for(var j=1;j<=v.n;j++){
+      P.push({label:T,sub:(nm?nm+' · ':'')+'Round '+j+'/'+v.n,dur:v.w,kind:'work',bi:bi});
+      if(j<v.n&&v.r>0)P.push({label:'Riposo',sub:'Round '+j+'/'+v.n,dur:v.r,kind:'rest',bi:bi});
+    }}
+    else if(b.t==='fortime')P.push({label:T,sub:nm+(nm?' · ':'')+'cap '+v.min+' min',dur:v.min*60,up:true,kind:'work',bi:bi});
+    else if(b.t==='rest')P.push({label:'Riposo',sub:nm,dur:v.sec,kind:'rest',bi:bi});
+  });
+  return P;
+}
+var R=null,AC=null;
+function beep(f,d){
+  try{
+    if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();
+    var o=AC.createOscillator(),g=AC.createGain();
+    o.frequency.value=f;g.gain.value=0.25;o.connect(g);g.connect(AC.destination);
+    o.start();o.stop(AC.currentTime+d);
+  }catch(e){}
+}
+function vib(p){try{if(navigator.vibrate)navigator.vibrate(p)}catch(e){}}
+function mmss(x){x=Math.max(0,Math.floor(x));var m=Math.floor(x/60),s=x%60;return (m<10?'0':'')+m+':'+(s<10?'0':'')+s}
+function draw(){
+  var p=R.ph[R.i],n=R.ph[R.i+1];
+  $('trun').className=p.kind==='work'?'work':p.kind==='rest'?'rest':'';
+  $('rb').textContent=p.bi<0?'Preparati':'Blocco '+(p.bi+1)+'/'+blocks.length;
+  $('rl').textContent=p.label+(p.sub?' · '+p.sub:'');
+  $('rn').textContent=n?'Prossimo: '+n.label+(n.sub?' · '+n.sub:''):'Ultimo blocco';
+  $('rs').textContent=p.up?'Fatto ✓':'Salta ⏭';
+}
+function tick(){
+  if(!R||R.done)return;
+  var now=Date.now();
+  if(!R.paused)R.el+=now-R.last;
+  R.last=now;
+  var p=R.ph[R.i],sec=R.el/1000,rem=p.dur-sec;
+  $('rt').textContent=p.up?mmss(sec):mmss(Math.ceil(rem));
+  if(rem<=3&&rem>0){var s=Math.ceil(rem);if(s!==R.ls){R.ls=s;beep(660,0.12)}}
+  if(rem<=0)next();
+}
+function next(){
+  R.i++;R.el=0;R.ls=null;
+  if(R.i>=R.ph.length){finish();return}
+  beep(988,0.45);vib([200]);draw();
+}
+function finish(){
+  R.done=true;clearInterval(R.t);
+  beep(988,0.3);setTimeout(function(){beep(988,0.3)},400);setTimeout(function(){beep(1318,0.6)},800);vib([300,150,300]);
+  $('trun').className='done';$('rl').textContent='Workout finito 🎉';$('rt').textContent='Bravo!';
+  $('rb').textContent='';$('rn').textContent='';$('rs').hidden=true;$('rp').hidden=true;$('rx').textContent='Chiudi';
+  rel();
+}
+function rel(){try{if(R&&R.wl){R.wl.release();R.wl=null}}catch(e){}}
+$('tgo').onclick=function(){
+  if(!blocks.length){alert('Aggiungi almeno un blocco');return}
+  beep(1,0.01);
+  R={ph:expand(),i:0,el:0,last:Date.now(),paused:false,ls:null,done:false,wl:null};
+  $('tbuild').hidden=true;$('trun').hidden=false;$('rs').hidden=false;$('rp').hidden=false;$('rp').textContent='Pausa';$('rx').textContent='Stop';
+  try{if(navigator.wakeLock)navigator.wakeLock.request('screen').then(function(l){R.wl=l}).catch(function(){})}catch(e){}
+  draw();R.t=setInterval(tick,200);tick();
+};
+$('rp').onclick=function(){R.paused=!R.paused;R.last=Date.now();$('rp').textContent=R.paused?'Riprendi':'Pausa'};
+$('rs').onclick=function(){if(R&&!R.done)next()};
+$('rx').onclick=function(){
+  if(R&&!R.done&&!confirm('Fermare il workout?'))return;
+  if(R){clearInterval(R.t);rel()}
+  R=null;$('trun').hidden=true;$('tbuild').hidden=false;
+};
+renderBlocks();
 fillCalc();render();sync();
 </script></body></html>
